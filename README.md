@@ -32,18 +32,19 @@ DPDK:
 5. `make defconfig`
 6. `make -j`
 
-Compile Register
-----------------
-Export RTE_TARGET: `export RTE_TARGET=build`
-Export RTE_SDK: `export RTE_SDK=/proj/demeter-PG0/murray22/nicbenchmarks/dpdk/`
-Run `make`
+Compilation
+-----------
+To compile the program, execute the following steps:
 
-Execute Register
-----------------
-Run `ethtool -i [interface]` and take note of the bus-info
+1. Export RTE_TARGET: `export RTE_TARGET=build`
+2. Export RTE_SDK: `export RTE_SDK=/proj/demeter-PG0/murray22/nicbenchmarks/dpdk/`
+3. Run `make`
 
-Server: sudo build/register -c 0xff -n 4 -w [bus-info value found in #5] --proc-type=auto -- --mode=SERVER --ip=[ip of the machine]
+Running the program
+-------------------
+To run the program, follow these steps:
 
-Example Server command: sudo build/register -c 0xff -n 4 -w 0000:41:00.0 --proc-type=auto -- --mode=SERVER --ip=192.168.1.1 --num_mbufs=2 
-
-Client: sudo build/register -c 0xff -n 4 -w [bus-info value found in #5] --proc-type=auto -- --mode=CLIENT -server_ip=[ip of the server] --ip=[ip of the machine] --server_mac=[mac address printed out by the server] --rate=120000 --message_size=1024 --time=10
+1. Run `ethtool -i [interface]` and take note of the bus-info
+2. Server: sudo build/register -c 0xff -n 4 -w [bus-info value found in #5] --proc-type=auto -- --mode=SERVER --ip=[ip of the machine]
+	a. Example Server command: sudo build/register -c 0xff -n 4 -w 0000:41:00.0 --proc-type=auto -- --mode=SERVER --ip=192.168.1.1 --num_mbufs=2 
+3. Client: sudo build/register -c 0xff -n 4 -w [bus-info value found in #5] --proc-type=auto -- --mode=CLIENT -server_ip=[ip of the server] --ip=[ip of the machine] --server_mac=[mac address printed out by the server] --rate=120000 --message_size=1024 --time=10
