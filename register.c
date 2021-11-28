@@ -679,11 +679,17 @@ out:
 static int ext_mem_manual(void **ext_mem_addr, 
 			       physaddr_t *maddrs, 
 			       int32_t *lkey_out,
+			       int8_t division,
 			       size_t num_pages) {
     // TODO: seems like specifying MAP_HUGE_2MB is not possible
-    printf("Ext meme manual!");
+    printf("Register and deregister external memory!\n");
     int flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB;
-    size_t pgsize = PGSIZE_2MB;
+    size_t pgsize;
+    if (division == 0) {
+	pgsize = PGSIZE_4KB;
+    } else {
+	pgsize = PGSIZE_2MB;
+    }
     //size_t num_pages = 5;
     void * addr = mmap(NULL, pgsize * num_pages, PROT_READ | PROT_WRITE, flags, -1, 0);
     if (addr == MAP_FAILED) {
@@ -702,7 +708,7 @@ static int ext_mem_manual(void **ext_mem_addr,
     if (!ret_addr) {
         printf("Failed to register mem with mlx5 device.\n");
         goto out;
-    } else {
+    } else if (division < 0) {
       printf("Deregistering memory!\n");
       mlx5_manual_dereg_mr(ret_addr);
     }
@@ -1173,7 +1179,7 @@ static int do_client(void) {
         ipv4_hdr->dst_addr = rte_cpu_to_be_32(server_ip);
 
         uint32_t ipv4_checksum = wrapsum(checksum((unsigned char *)ipv4_hdr, sizeof(struct rte_ipv4_hdr), 0));
-        printf("Checksum is %u\n", (unsigned)ipv4_checksum);
+        //printf("Checksum is %u\n", (unsigned)ipv4_checksum);
         ipv4_hdr->hdr_checksum = rte_cpu_to_be_32(ipv4_checksum);
         header_size += sizeof(*ipv4_hdr);
         ptr += sizeof(*ipv4_hdr);
@@ -1198,7 +1204,7 @@ static int do_client(void) {
                                               checksum((unsigned_char *)&ipv4_hdr->src_addr, 
                                               2 * sizeof(ip->src_addr), 
                                               IPPROTO_UDP + (uint32_t)ntohs(sizeof(*udp_hdr))))));*/
-        printf("Udp checksum is %u\n", (unsigned)udp_cksum);
+        //printf("Udp checksum is %u\n", (unsigned)udp_cksum);
         udp_hdr->dgram_cksum = rte_cpu_to_be_16(udp_cksum);
         ptr += sizeof(*udp_hdr);
         header_size += sizeof(*udp_hdr);
@@ -1221,31 +1227,31 @@ static int do_client(void) {
         unsigned char *pkt_buffer = rte_pktmbuf_mtod(pkt, unsigned char *);
         int ct = 0;
         for (int i = 0; i < sizeof(struct rte_ether_hdr); i++) {
-            printf("%02hhx", pkt_buffer[i]);
+            //printf("%02hhx", pkt_buffer[i]);
             ct += 1;
             if (ct % 2 == 0) {
-                printf(" ");
+                //printf(" ");
             }
         }
-        printf("\n");
+        //printf("\n");
         ct = 0;
         for (int i = sizeof(struct rte_ether_hdr); i < sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr); i++) {
-            printf("%02hhx", pkt_buffer[i]);
+            //printf("%02hhx", pkt_buffer[i]);
             ct += 1;
             if (ct % 2 == 0) {
-                printf(" ");
+                //printf(" ");
             }
         }
-        printf("\n");
+        //printf("\n");
         ct = 0;
         for (int i = sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr); i < sizeof(struct rte_ether_hdr) + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr); i++) {
-            printf("%02hhx", pkt_buffer[i]);
+            //printf("%02hhx", pkt_buffer[i]);
             ct += 1;
             if (ct % 2 == 0) {
-                printf(" ");
+                //printf(" ");
             }
         }
-        printf("\n");
+        //printf("\n");
         //exit(1);
 
         while (pkts_sent < 1) {
@@ -1298,9 +1304,9 @@ static int do_client(void) {
     return 0;
 }
 
-static int do_server(void) {
+static int do_server(size_t division, size_t page_num) {
     // initialize external memory
-    void *ext_mem_addr = NULL;
+    /*void *ext_mem_addr = NULL;
     void *paddrs_mem = malloc(sizeof(physaddr_t) * 100);
     int32_t lkey = -1;
     if (paddrs_mem == NULL) {
@@ -1324,7 +1330,25 @@ static int do_server(void) {
             printf("Lkey still -1\n");
             return ret;
         }
+    }*/
+    void *ext_mem_addr = NULL;
+    void *paddrs_mem = malloc(sizeof(physaddr_t) * 100);
+    int32_t lkey = -1;
+    if (paddrs_mem == NULL) {
+       printf("Error malloc'ing paddr for storing physical addresses.\n");
+       return ENOMEM;
     }
+    physaddr_t *paddrs = (physaddr_t *)paddrs_mem;
+    void *ext_mem_phys_addr = NULL;
+    int ret = ext_mem_manual(&ext_mem_addr, paddrs, &lkey, division, page_num);
+    if (ret != 0) {
+           printf("Error in extmem manual init: %d\n", ret);
+           return ret;
+    } else if (lkey == -1) {
+           printf("Lkey still -1\n");
+           return -1;
+    }
+    
 
     printf("Starting server program\n");
     struct rte_mbuf *rx_bufs[BURST_SIZE];
@@ -1522,12 +1546,6 @@ static int do_server(void) {
     return 0;
 }
 
-/*int
-run_max_pages_benchmark(size_t num_pages)
-{
-
-}*/
-
 int
 run_max_pages_benchmark(size_t page_num) 
 {
@@ -1536,7 +1554,6 @@ run_max_pages_benchmark(size_t page_num)
    printf("Do we fail here?\n");
    void *paddrs_mem = malloc(sizeof(physaddr_t) * 100);
    int32_t lkey = -1;
-   //size_t page_num = pow(2, exp);
    if (paddrs_mem == NULL) {
        printf("Error malloc'ing paddr for storing physical addresses.\n");
        return ENOMEM;
@@ -1544,7 +1561,7 @@ run_max_pages_benchmark(size_t page_num)
    physaddr_t *paddrs = (physaddr_t *)paddrs_mem;
    void *ext_mem_phys_addr = NULL;
    printf("Nope 2\n");
-   int ret = ext_mem_manual(&ext_mem_addr, paddrs, &lkey, page_num);
+   int ret = ext_mem_manual(&ext_mem_addr, paddrs, &lkey, 1, page_num);
    free(paddrs_mem);
    printf("Nope 3\n");
    if (ret != 0) {
@@ -1558,9 +1575,30 @@ run_max_pages_benchmark(size_t page_num)
 }
 
 int 
-run_registration_division_benchmark(void)
+run_registration_division_benchmark(size_t division, size_t page_num)
 {
-  return 0;
+   void *ext_mem_addr = NULL;
+   printf("Do we fail here?\n");
+   void *paddrs_mem = malloc(sizeof(physaddr_t) * 100);
+   int32_t lkey = -1;
+   if (paddrs_mem == NULL) {
+       printf("Error malloc'ing paddr for storing physical addresses.\n");
+       return ENOMEM;
+   }
+   physaddr_t *paddrs = (physaddr_t *)paddrs_mem;
+   void *ext_mem_phys_addr = NULL;
+   printf("Nope 2\n");
+   int ret = ext_mem_manual(&ext_mem_addr, paddrs, &lkey, division, page_num);
+   free(paddrs_mem);
+   printf("Nope 3\n");
+   if (ret != 0) {
+	   printf("Error in extmem manual init: %d\n", ret);
+           return ret;
+   } else if (lkey == -1) {
+	   printf("Lkey still -1\n");
+	   return -1;
+   }
+   return 0;
 }
 
 
@@ -1577,8 +1615,8 @@ main(int argc, char **argv)
     if (ret != 0) {
         return ret;
     }
-    size_t max_num_pages = 1;
-    for (size_t i = 1; i; i++) {
+    size_t max_num_pages = 1023; //Why does 1024 not good??
+    /*for (size_t i = 1; i; i++) {
 	    int ret = run_max_pages_benchmark(i);
 	    if (ret != 0) {
 	      break;
@@ -1586,15 +1624,16 @@ main(int argc, char **argv)
 	    printf("New max number of pages: %ld\n", i); // Looks like 1024 right now
 	    max_num_pages = i;
     }
-    printf("Maximum number of pages is: %zu\n", max_num_pages);
+    printf("Maximum number of pages is: %zu\n", max_num_pages);*/
 
-   /* for (size_t i = 1; i < max_num_pages; i++) { // 256, 512, 1024, 2048
-	    run_registration_load_benchmark(i);
+    for (size_t i = 0; i < 2; i++) { // 256, 512, 1024, 2048
+	 if (mode == MODE_UDP_CLIENT) {
+	   int ret = do_client();
+	   printf("Return value from do_client is: \n", ret);
+	 } else {
+	   do_server(i, max_num_pages);
+	 }
     }
-    for (size_t i = 1; i < 6; i++) { // 256, 512, 1024, 2048
-	    run_registration_division_benchmark(i);
-    }*/
-
     printf("Reached end of program execution\n");
     return 0;
 }
