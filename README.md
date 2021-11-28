@@ -1,18 +1,22 @@
 # nicbenchmarks
 Benchmarking Mellanox NICs:
 
-Dependencies (Install in this order)
-------------------------------------
-Numa:
-sudo apt-get install libnuma-dev
+Dependencies
+-------------
+Install the following dependencies in the listed order:
+
+Numa: 
+1. `sudo apt-get update`
+2. `sudo apt-get upgrade`
+3. `sudo apt-get install libnuma-dev`
 
 Mellanox Driver:
-1. wget https://www.mellanox.com/downloads/ofed/MLNX_OFED-<version>/MLNX_OFED_LINUX-<version>-<distribution>-<arch>.tgz
-	Example: wget https://www.mellanox.com/downloads/ofed/MLNX_OFED-5.0-2.1.8.0/MLNX_OFED_LINUX-5.0-2.1.8.0-ubuntu18.04-x86_64.tgz
-2. tar -xvf MLNX_OFED_LINUX-<version>-<distribution>-<arch>.tgz
-3. cd MLNX_OFED_LINUX-<version>-<distribution>-<arch>
-4. sudo ./mlnxofedinstall --upstream-libs --dpdk
-5. Restart the driver: sudo /etc/init.d/openibd restart
+1. `wget https://www.mellanox.com/downloads/ofed/MLNX_OFED-<version>/MLNX_OFED_LINUX-<version>-<distribution>-<arch>.tgz
+	Example: wget https://www.mellanox.com/downloads/ofed/MLNX_OFED-5.0-2.1.8.0/MLNX_OFED_LINUX-5.0-2.1.8.0-ubuntu18.04-x86_64.tgz`
+2. `tar -xvf MLNX_OFED_LINUX-<version>-<distribution>-<arch>.tgz`
+3. `cd MLNX_OFED_LINUX-<version>-<distribution>-<arch>`
+4. `sudo ./mlnxofedinstall --upstream-libs --dpdk`
+5. Restart the driver: `sudo /etc/init.d/openibd restart`
 
 Enable HugePages:
 1. Run `sudo /path/to/nicbenchmarks/dpdk/usertools/dpdk-setup.sh`
@@ -21,12 +25,12 @@ Enable HugePages:
 4. Quit
 
 DPDK:
-1. Clone dpdk github repo: https://github.com/DPDK/dpdk.git
-2. cd ./dpdk/
-3. git checkout v19.11
-4. git apply ../mlx5_registration.patch
-5. make defconfig
-6. make -j
+1. `git clone https://github.com/DPDK/dpdk.git`
+2. `cd ./dpdk/`
+3. `git checkout v19.11`
+4. `git apply ../mlx5_registration.patch`
+5. `make defconfig`
+6. `make -j`
 
 Compile Register
 ----------------
