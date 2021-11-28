@@ -14,6 +14,12 @@ Mellanox Driver:
 4. sudo ./mlnxofedinstall --upstream-libs --dpdk
 5. Restart the driver: sudo /etc/init.d/openibd restart
 
+Enable HugePages:
+1. Run `sudo /path/to/nicbenchmarks/dpdk/usertools/dpdk-setup.sh`
+2. Select #49 (or #6, depends on the script)
+3. Enter 2048
+4. Quit
+
 DPDK:
 1. Clone dpdk github repo: https://github.com/DPDK/dpdk.git
 2. cd ./dpdk/
