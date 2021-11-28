@@ -318,7 +318,7 @@ static uint64_t clock_offset = 0;
 static size_t header_payload_size = 0; // for num_mbufs = 2, how much data comes after header in first mbuf (rest of size in second)
 
 static struct rte_mbuf_ext_shared_info *shinfo = NULL;
-
+float page_alloc_times[1023];
 
 static int zero_copy_mode = 0;
 static void *payload_to_copy = NULL;
@@ -1549,9 +1549,10 @@ static int do_server(size_t division, size_t page_num) {
 int
 run_max_pages_benchmark(size_t page_num) 
 {
+   uint64_t start_time, end_time;
+
    // initialize external memory
    void *ext_mem_addr = NULL;
-   printf("Do we fail here?\n");
    void *paddrs_mem = malloc(sizeof(physaddr_t) * 100);
    int32_t lkey = -1;
    if (paddrs_mem == NULL) {
@@ -1561,7 +1562,12 @@ run_max_pages_benchmark(size_t page_num)
    physaddr_t *paddrs = (physaddr_t *)paddrs_mem;
    void *ext_mem_phys_addr = NULL;
    printf("Nope 2\n");
-   int ret = ext_mem_manual(&ext_mem_addr, paddrs, &lkey, 1, page_num);
+   start_time = rte_get_timer_cycles();
+   int ret = ext_mem_manual(&ext_mem_addr, paddrs, &lkey, -1, page_num);
+   end_time = rte_get_timer_cycles();
+   printf("Register %zu Pages: Ran for %f seconds.\n",
+		page_num, (float) (end_time - start_time) / rte_get_timer_hz()); 
+   page_alloc_times[page_num] = (float) (end_time - start_time) / rte_get_timer_hz();
    free(paddrs_mem);
    printf("Nope 3\n");
    if (ret != 0) {
@@ -1578,7 +1584,6 @@ int
 run_registration_division_benchmark(size_t division, size_t page_num)
 {
    void *ext_mem_addr = NULL;
-   printf("Do we fail here?\n");
    void *paddrs_mem = malloc(sizeof(physaddr_t) * 100);
    int32_t lkey = -1;
    if (paddrs_mem == NULL) {
@@ -1587,10 +1592,8 @@ run_registration_division_benchmark(size_t division, size_t page_num)
    }
    physaddr_t *paddrs = (physaddr_t *)paddrs_mem;
    void *ext_mem_phys_addr = NULL;
-   printf("Nope 2\n");
    int ret = ext_mem_manual(&ext_mem_addr, paddrs, &lkey, division, page_num);
    free(paddrs_mem);
-   printf("Nope 3\n");
    if (ret != 0) {
 	   printf("Error in extmem manual init: %d\n", ret);
            return ret;
@@ -1615,21 +1618,23 @@ main(int argc, char **argv)
     if (ret != 0) {
         return ret;
     }
-    size_t max_num_pages = 1023; //Why does 1024 not good??
-    /*for (size_t i = 1; i; i++) {
-	    int ret = run_max_pages_benchmark(i);
-	    if (ret != 0) {
-	      break;
-	    }
-	    printf("New max number of pages: %ld\n", i); // Looks like 1024 right now
-	    max_num_pages = i;
-    }
-    printf("Maximum number of pages is: %zu\n", max_num_pages);*/
 
+    /*Benchmark #1: How expensive is pinning large amounts of pages?*/
+    size_t max_num_pages = 1023; //Why does 1024 not good??
+    for (size_t i = 1; i <= max_num_pages; i++) {
+      printf("Current number of pages: %zu\n", i);
+      int ret = run_max_pages_benchmark(i);
+      if (ret != 0) {
+        break;
+      }
+    }
+    printf("Maximum number of pages is: %zu\n", max_num_pages);
+    return 0;
+    /*Benchmark #2: */
     for (size_t i = 0; i < 2; i++) { // 256, 512, 1024, 2048
 	 if (mode == MODE_UDP_CLIENT) {
 	   int ret = do_client();
-	   printf("Return value from do_client is: \n", ret);
+	   printf("Return value from do_client is: %d\n", ret);
 	 } else {
 	   do_server(i, max_num_pages);
 	 }
