@@ -118,10 +118,13 @@ static void dump_latencies(Latency_Dist_t *dist) {
     qsort(arr, dist->total_count, sizeof(uint64_t), cmpfunc);
     qsort(arr2, dist->total_count - amt_to_remove, sizeof(uint64_t), cmpfunc);
     uint64_t avg_latency = (dist->latency_sum) / (dist->total_count);
+    printf("Avg latency\n");
     uint64_t median = arr[(size_t)((double)dist->total_count * 0.50)];
+    printf("Median\n");
     uint64_t p99 = arr[(size_t)((double)dist->total_count * 0.99)];
+    printf("P99\n");
     uint64_t p999 = arr[(size_t)((double)dist->total_count * 0.999)];
-    
+    printf("P999\n");
     uint64_t average2 = total2 / (dist->total_count - amt_to_remove);
     uint64_t median2 = arr2[(size_t)((double)(dist->total_count - amt_to_remove) * 0.50)];
     uint64_t p992 = arr2[(size_t)((double)(dist->total_count - amt_to_remove) * 0.99)];
@@ -645,8 +648,11 @@ static int mem_lookup_page_phys_addrs(void *addr, size_t len,
 	 * safe to get a machine address. If we later decide to support
 	 * 4KB pages, then we need to mlock() the page first.
 	 */
-	if (pgsize == PGSIZE_4KB)
-		return -EINVAL;
+	/*if (pgsize == PGSIZE_4KB)
+		return -EINVAL;*/
+	if (pgsize == PGSIZE_4KB) {
+	  mlock(addr, len);
+	}
 
 	fd = open("/proc/self/pagemap", O_RDONLY);
 	if (fd < 0)
@@ -1259,7 +1265,7 @@ static int do_client(void) {
         }
         outstanding ++;
         uint64_t last_sent = rte_get_timer_cycles();
-        // printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
+        printf("Sent packet at %u, %d is outstanding, intersend is %u\n", (unsigned)last_sent, outstanding, (unsigned)intersend_time);
 
         /* now poll on receiving packets */
         nb_rx = 0;
@@ -1273,7 +1279,7 @@ static int do_client(void) {
                 continue;
             }
 
-            // printf("Received burst of %u\n", (unsigned)nb_rx);
+            printf("Received burst of %u\n", (unsigned)nb_rx);
             for (int i = 0; i < nb_rx; i++) {
                 struct sockaddr_in src, dst;
                 void *payload = NULL;
@@ -1622,23 +1628,31 @@ main(int argc, char **argv)
     /*Benchmark #1: How expensive is pinning large amounts of pages?*/
     size_t max_num_pages = 1023; //Why does 1024 not good??
     for (size_t i = 1; i <= max_num_pages; i++) {
-      printf("Current number of pages: %zu\n", i);
       int ret = run_max_pages_benchmark(i);
       if (ret != 0) {
         break;
       }
     }
-    printf("Maximum number of pages is: %zu\n", max_num_pages);
-    return 0;
-    /*Benchmark #2: */
-    for (size_t i = 0; i < 2; i++) { // 256, 512, 1024, 2048
-	 if (mode == MODE_UDP_CLIENT) {
-	   int ret = do_client();
-	   printf("Return value from do_client is: %d\n", ret);
-	 } else {
-	   do_server(i, max_num_pages);
-	 }
+    for (size_t i = 0; i < max_num_pages; i++) {
+      printf("%f\n", page_alloc_times[i]);
     }
+    printf("Maximum number of pages is: %zu\n", max_num_pages);
+   
+    /*Benchmark #2: How do different partitions of pages effect the runtime?*/
+    /*if (mode == MODE_UDP_CLIENT) {
+      int ret = do_client();
+      printf("Return value from do_client is: %d\n", ret);
+    } else {
+      do_server(1, max_num_pages);
+    }*/
+    /*for (size_t i = 0; i < 2; i++) { // 4K, 2M
+      if (mode == MODE_UDP_CLIENT) {
+        int ret = do_client();
+	printf("Return value from do_client is: %d\n", ret);
+      } else {
+	do_server(i, max_num_pages);
+      }
+    }*/
     printf("Reached end of program execution\n");
     return 0;
 }
