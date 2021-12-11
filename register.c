@@ -19,6 +19,9 @@
 #include <unistd.h>
 #include <numaif.h>
 #include <math.h> 
+/*#include <fstream>
+#include <iostream>
+#include <vector>*/
 
 #include <rte_memory.h>
 #include <rte_launch.h>
@@ -688,7 +691,7 @@ static int ext_mem_manual(void **ext_mem_addr,
 			       int8_t division,
 			       size_t num_pages) {
     // TODO: seems like specifying MAP_HUGE_2MB is not possible
-    printf("Register and deregister external memory!\n");
+    // printf("Register and deregister external memory!\n");
     int flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB;
     size_t pgsize;
     if (division == 0) {
@@ -1355,200 +1358,7 @@ static int do_server(size_t division, size_t page_num) {
            return -1;
     }
     
-
     printf("Starting server program\n");
-    struct rte_mbuf *rx_bufs[BURST_SIZE];
-    struct rte_mbuf *tx_bufs[BURST_SIZE];
-    struct rte_mbuf *secondary_tx_bufs[BURST_SIZE];
-    struct rte_mbuf *rx_buf;
-    uint8_t queue = 0; // our application only uses one queue
-    
-    uint16_t nb_rx, n_to_tx, nb_tx, i;
-    struct rte_ether_hdr *rx_ptr_mac_hdr;
-    struct rte_ipv4_hdr *rx_ptr_ipv4_hdr;
-    struct rte_udp_hdr *rx_rte_udp_hdr;
-    struct rte_ether_hdr *tx_ptr_mac_hdr;
-    struct rte_ipv4_hdr *tx_ptr_ipv4_hdr;
-    struct rte_udp_hdr *tx_rte_udp_hdr;
-    uint64_t *tx_buf_id_ptr;
-    uint64_t *rx_buf_id_ptr;
-    //struct rte_ether_addr src_addr;
-    //uint32_t src_ip_addr;
-    //uint16_t tmp_port;
-
-    /* Run until the application is quit or killed. */
-    for (;;) {
-        nb_rx = rte_eth_rx_burst(our_dpdk_port_id, queue, rx_bufs, BURST_SIZE);
-        if (nb_rx == 0) {
-            continue;
-        }
-        printf("Recieved packets: %d\n", nb_rx);
-        n_to_tx = 0;
-        for (i = 0; i < nb_rx; i++) {
-            struct sockaddr_in src, dst;
-            void *payload = NULL;
-            size_t payload_length = 0;
-            int valid = parse_packet(&src, &dst, &payload, &payload_length, rx_bufs[i]);
-            struct rte_mbuf* secondary = NULL;
-            if (valid == 0) {
-                rx_buf = rx_bufs[i];
-                size_t header_size = rx_buf->pkt_len - (payload_length);
-                payload_length -= 8;
-                header_size += 8;
-                // echo the packet back
-                if (memory_mode == MEM_EXT) {
-                    if (num_mbufs == 1) {
-                        // just one mbuf, which has header in it
-                        tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(extbuf_mempool);
-                        // TODO: check if you can init with non
-                        // beginning/aligned address
-                        rte_pktmbuf_attach_extbuf_(tx_bufs[n_to_tx], ext_mem_addr, ext_mem_iova, payload_length, shinfo);
-                    } else {
-                        // two mbufs, two different mempools
-                        tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(mbuf_pool);
-                        secondary_tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(extbuf_mempool);
-                        // attach at beginning of ext_mem_addr, but assume some
-                        // of the data is in the first mbuf
-                        rte_pktmbuf_attach_extbuf_(secondary_tx_bufs[n_to_tx], ext_mem_addr, ext_mem_iova, payload_length - header_payload_size, shinfo);
-                    }
-                } else if (memory_mode == MEM_EXT_MANUAL) {
-                    // manually add information about external buffer
-                    void *payload_addr = ext_mem_addr + 4096;
-                    assert(num_mbufs == 2);
-                    tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(mbuf_pool);
-                    secondary_tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(extbuf_mempool);
-                    secondary_tx_bufs[n_to_tx]->buf_addr = (char *)(payload_addr);
-                    uint32_t page_number = PGN_2MB((uintptr_t)payload_addr - (uintptr_t)ext_mem_addr);
-                    secondary_tx_bufs[n_to_tx]->buf_physaddr = paddrs[page_number] + PGOFF_2MB(payload_addr);
-                    secondary_tx_bufs[n_to_tx]->buf_iova = paddrs[page_number] + PGOFF_2MB(payload_addr);
-                    secondary_tx_bufs[n_to_tx]->data_off = 0;
-                    rte_mbuf_refcnt_set(secondary_tx_bufs[n_to_tx], 1);
-                    struct tx_pktmbuf_priv *priv_data =  tx_pktmbuf_get_priv(secondary_tx_bufs[n_to_tx]);
-                    priv_data->lkey = lkey;
-                } else if (memory_mode == MEM_EXT_MANUAL_DPDK) {
-                    tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(header_mempool);
-                    secondary_tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(extbuf_mempool);
-                    /*extra_mbufs[n_to_tx] = rte_pktmbuf_alloc_(mbuf_pool);
-                    secondary_tx_bufs[n_to_tx]->buf_addr = extra_mbufs[n_to_tx]->buf_addr;
-                    secondary_tx_bufs[n_to_tx]->buf_physaddr = extra_mbufs[n_to_tx]->buf_physaddr;
-                    secondary_tx_bufs[n_to_tx]->data_off = extra_mbufs[n_to_tx]->data_off;
-                    secondary_tx_bufs[n_to_tx]->buf_iova = extra_mbufs[n_to_tx]->buf_iova;*/
-                    secondary_tx_bufs[n_to_tx]->buf_addr = (void *)((char *)(rx_bufs[n_to_tx]->buf_addr) + header_size);
-                    secondary_tx_bufs[n_to_tx]->buf_iova = (void *)((char *)(rx_bufs[n_to_tx]->buf_iova) + header_size);
-                    secondary_tx_bufs[n_to_tx]->data_off = rx_bufs[n_to_tx]->data_off;
-                    secondary_tx_bufs[n_to_tx]->buf_physaddr = (void *)((char *)(rx_bufs[n_to_tx]->buf_physaddr) + header_size);
-                    rte_mbuf_refcnt_set(secondary_tx_bufs[n_to_tx], 1);
-                    struct tx_pktmbuf_priv *priv_data =  tx_pktmbuf_get_priv(secondary_tx_bufs[n_to_tx]);
-                    priv_data->lkey = -1;
-                } else {
-                    // normal DPDK memory
-                    if (num_mbufs == 1) {
-                        tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(mbuf_pool);
-                        if (zero_copy_mode != 1) {
-                            char *pkt_buf = (char *)(rte_pktmbuf_mtod_offset(tx_bufs[n_to_tx], char *, sizeof(struct rte_udp_hdr) + sizeof(struct rte_ipv4_hdr) + RTE_ETHER_HDR_LEN + 8));
-                            rte_memcpy(pkt_buf, (char *)(payload_to_copy), payload_length);
-                        }
-                    } else {
-                        tx_bufs[n_to_tx] = rte_pktmbuf_alloc_(header_mempool);
-                        secondary_tx_bufs[n_to_tx] = rte_pktmbuf_alloc(mbuf_pool);
-                        if (zero_copy_mode != 1) {
-                            char *pkt_buf = (char *)(rte_pktmbuf_mtod_offset(secondary_tx_bufs[n_to_tx], char *, 0));
-                            rte_memcpy(pkt_buf, (char *)payload_to_copy, payload_length);
-                        }
-                    }
-                }
-
-                struct rte_mbuf* tx_buf = tx_bufs[n_to_tx];
-                secondary = secondary_tx_bufs[n_to_tx];
-
-                if (tx_buf == NULL) {
-                    printf("Error first allocating tx mbuf\n");
-                    return -EINVAL;
-                }
-
-                if (num_mbufs == 2) {
-                    if (secondary == NULL) {
-                        printf("Error allocating secondary mbuf\n");
-                        return -EINVAL;
-                    }
-                }
-
-
-                /* swap src and dst ether addresses */
-                rx_ptr_mac_hdr = rte_pktmbuf_mtod(rx_buf, struct rte_ether_hdr *);
-                tx_ptr_mac_hdr = rte_pktmbuf_mtod(tx_buf, struct rte_ether_hdr *);
-                rte_ether_addr_copy(&rx_ptr_mac_hdr->s_addr, &tx_ptr_mac_hdr->d_addr);
-				rte_ether_addr_copy(&rx_ptr_mac_hdr->d_addr, &tx_ptr_mac_hdr->s_addr);
-				// rte_ether_addr_copy(&src_addr, &ptr_mac_hdr->d_addr);
-                tx_ptr_mac_hdr->ether_type = htons(RTE_ETHER_TYPE_IPV4);
-
-                /* swap src and dst ip addresses */
-                //src_ip_addr = rx_ptr_ipv4_hdr->src_addr;
-                rx_ptr_ipv4_hdr = rte_pktmbuf_mtod_offset(rx_buf, struct rte_ipv4_hdr *, RTE_ETHER_HDR_LEN);
-                tx_ptr_ipv4_hdr = rte_pktmbuf_mtod_offset(tx_buf, struct rte_ipv4_hdr *, RTE_ETHER_HDR_LEN);
-                tx_ptr_ipv4_hdr->src_addr = rx_ptr_ipv4_hdr->dst_addr;
-                tx_ptr_ipv4_hdr->dst_addr = rx_ptr_ipv4_hdr->src_addr;
-
-                tx_ptr_ipv4_hdr->hdr_checksum = 0;
-                tx_ptr_ipv4_hdr->version_ihl = IP_VHL_DEF;
-                tx_ptr_ipv4_hdr->type_of_service = 0;
-                tx_ptr_ipv4_hdr->total_length = rte_cpu_to_be_16(sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_udp_hdr) + payload_length);
-                tx_ptr_ipv4_hdr->packet_id = 0;
-                tx_ptr_ipv4_hdr->fragment_offset = 0;
-                tx_ptr_ipv4_hdr->time_to_live = IP_DEFTTL;
-                tx_ptr_ipv4_hdr->next_proto_id = IPPROTO_UDP;
-                /* offload checksum computation in hardware */
-                tx_ptr_ipv4_hdr->hdr_checksum = 0;
-
-                /* Swap UDP ports */
-                rx_rte_udp_hdr = rte_pktmbuf_mtod_offset(rx_buf, struct rte_udp_hdr *, RTE_ETHER_HDR_LEN + sizeof(struct rte_ipv4_hdr));
-                tx_rte_udp_hdr = rte_pktmbuf_mtod_offset(tx_buf, struct rte_udp_hdr *, RTE_ETHER_HDR_LEN + sizeof(struct rte_ipv4_hdr));
-                //tmp_port = rte_udp_hdr->src_port;
-                tx_rte_udp_hdr->src_port = rx_rte_udp_hdr->dst_port;
-                tx_rte_udp_hdr->dst_port = rx_rte_udp_hdr->src_port;
-                tx_rte_udp_hdr->dgram_len = rte_cpu_to_be_16(sizeof(struct rte_udp_hdr) + payload_length);
-                tx_rte_udp_hdr->dgram_cksum = 0;
-
-                /* Set packet id */
-                tx_buf_id_ptr = rte_pktmbuf_mtod_offset(tx_buf, uint64_t *, sizeof(struct rte_udp_hdr) + sizeof(struct rte_ipv4_hdr) + RTE_ETHER_HDR_LEN);
-                rx_buf_id_ptr = rte_pktmbuf_mtod_offset(rx_buf, uint64_t *, sizeof(struct rte_udp_hdr) + sizeof(struct rte_ipv4_hdr) + RTE_ETHER_HDR_LEN);
-                *tx_buf_id_ptr = *rx_buf_id_ptr;
-
-                /* Set metadata */
-                tx_buf->l2_len = RTE_ETHER_HDR_LEN;
-                tx_buf->l3_len = sizeof(struct rte_ipv4_hdr);
-                tx_buf->ol_flags = PKT_TX_IP_CKSUM | PKT_TX_IPV4;
-                tx_buf->data_len = header_size + payload_length;
-                tx_buf->pkt_len = header_size + payload_length;
-                tx_buf->nb_segs = 1;
-
-                if (num_mbufs == 2) {
-                    tx_buf->next = secondary;
-                    tx_buf->nb_segs = 2;
-                    tx_buf->data_len = header_size + header_payload_size;
-                    secondary->data_len = payload_length - header_payload_size;
-                }
-                n_to_tx++;
-                if (memory_mode != MEM_EXT_MANUAL_DPDK) {
-                rte_pktmbuf_free_(rx_bufs[i]);
-                }
-                continue;
-            } else {
-                rte_pktmbuf_free_(rx_bufs[i]);
-            }
-        }
-        if (n_to_tx > 0) {
-            nb_tx = rte_eth_tx_burst_(our_dpdk_port_id, queue, tx_bufs, n_to_tx);
-            if (nb_tx != n_to_tx) {
-                printf("error: could not transmit all %u pkts, transmitted %u\n", n_to_tx, nb_tx);
-            }
-            if (memory_mode == MEM_EXT_MANUAL_DPDK) {
-                for (int i = 0; i < nb_tx; i++) {
-                    rte_pktmbuf_free_(rx_bufs[i]);
-                }
-            }
-        }
-    }
     return 0;
 }
 
@@ -1586,30 +1396,52 @@ run_max_pages_benchmark(size_t page_num)
    return 0;
 }
 
-int 
-run_registration_division_benchmark(size_t division, size_t page_num)
-{
-   void *ext_mem_addr = NULL;
-   void *paddrs_mem = malloc(sizeof(physaddr_t) * 100);
-   int32_t lkey = -1;
-   if (paddrs_mem == NULL) {
-       printf("Error malloc'ing paddr for storing physical addresses.\n");
-       return ENOMEM;
-   }
-   physaddr_t *paddrs = (physaddr_t *)paddrs_mem;
-   void *ext_mem_phys_addr = NULL;
-   int ret = ext_mem_manual(&ext_mem_addr, paddrs, &lkey, division, page_num);
-   free(paddrs_mem);
-   if (ret != 0) {
-	   printf("Error in extmem manual init: %d\n", ret);
-           return ret;
-   } else if (lkey == -1) {
-	   printf("Lkey still -1\n");
-	   return -1;
-   }
-   return 0;
+
+void* max_mappings_benchmark(void **ext_mem_addr, 
+			       physaddr_t *maddrs, 
+			       int32_t *lkey_out,
+			       size_t num_pages) {
+    // TODO: seems like specifying MAP_HUGE_2MB is not possible
+    // printf("Register and deregister external memory!\n");
+    int flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE | MAP_HUGETLB;
+    size_t pgsize = PGSIZE_2MB;
+    size_t success = 0;
+    //size_t num_pages = 5;
+    void * addr = mmap(NULL, pgsize * num_pages, PROT_READ | PROT_WRITE, flags, -1, 0);
+    if (addr == MAP_FAILED) {
+        printf("Failed to mmap memory\n");
+    }
+
+    memset((char *)addr, 'D', pgsize * num_pages);
+    *ext_mem_addr = addr;
+    int ret = mem_lookup_page_phys_addrs(addr, pgsize * num_pages, pgsize, maddrs);
+    if (ret != 0) {
+        printf("Lookup to phys addr failed\n");
+        goto out;
+    }
+    // manually register the memory with the MLX5 device
+    void *ret_addr = mlx5_manual_reg_mr(0, addr, pgsize * num_pages, (uint32_t *)lkey_out);
+    if (!ret_addr) {
+        printf("Failed to register mem with mlx5 device.\n");
+        goto out;
+    }
+    success = 1;
+
+out:
+    munmap(addr, pgsize * num_pages);
+    if (success) {
+      return ret_addr;
+    }
+    return NULL;
 }
 
+unsigned int
+deregister_memory(void** register_arr, size_t len)
+{
+  for (size_t i = 0; i < len; i++) {
+    mlx5_manual_dereg_mr(register_arr[i]);
+  }
+}
 
 int
 main(int argc, char **argv)
@@ -1626,7 +1458,8 @@ main(int argc, char **argv)
     }
 
     /*Benchmark #1: How expensive is pinning large amounts of pages?*/
-    size_t max_num_pages = 1023; //Why does 1024 not good??
+    size_t max_num_pages = 1023; //Why is 1024 not good??
+    /*FILE *fp = fopen ("bench_one.csv", "w");
     for (size_t i = 1; i <= max_num_pages; i++) {
       int ret = run_max_pages_benchmark(i);
       if (ret != 0) {
@@ -1634,25 +1467,55 @@ main(int argc, char **argv)
       }
     }
     for (size_t i = 0; i < max_num_pages; i++) {
-      printf("%f\n", page_alloc_times[i]);
+      fprintf(fp, "%lu,%f\n", i, page_alloc_times[i]);
     }
-    printf("Maximum number of pages is: %zu\n", max_num_pages);
-   
-    /*Benchmark #2: How do different partitions of pages effect the runtime?*/
-    /*if (mode == MODE_UDP_CLIENT) {
-      int ret = do_client();
-      printf("Return value from do_client is: %d\n", ret);
-    } else {
-      do_server(1, max_num_pages);
-    }*/
-    /*for (size_t i = 0; i < 2; i++) { // 4K, 2M
-      if (mode == MODE_UDP_CLIENT) {
-        int ret = do_client();
-	printf("Return value from do_client is: %d\n", ret);
-      } else {
-	do_server(i, max_num_pages);
-      }
-    }*/
+    fclose(fp);*/
+    FILE *fp_two = fopen ("bench_two.csv", "w");
+    void *ext_mem_addr = NULL;
+   void *paddrs_mem = malloc(sizeof(physaddr_t) * 100);
+   int32_t lkey = -1;
+   if (paddrs_mem == NULL) {
+       printf("Error malloc'ing paddr for storing physical addresses.\n");
+       return ENOMEM;
+   }
+   physaddr_t *paddrs = (physaddr_t *)paddrs_mem;
+   void *ext_mem_phys_addr = NULL;
+   void* register_ptr[max_num_pages*max_num_pages];
+   size_t num_mapping;
+   size_t idx = 0;
+   for (num_mapping = 1; num_mapping < max_num_pages - 5; num_mapping+=1) {
+     uint64_t reg_is_null = 0;
+     uint64_t start_time = rte_get_timer_cycles();
+     size_t j = 0;
+     for (j = 1; j < 5; j++) {
+       void* reg = max_mappings_benchmark(&ext_mem_addr, paddrs, &lkey, 1);
+       uint64_t end_time = rte_get_timer_cycles();
+       fprintf(fp_two, "%lu,%lu,%f\n", num_mapping, j, (float) (end_time - start_time) / rte_get_timer_hz());
+       if (reg == NULL) {
+	 reg_is_null = 1;
+         break;
+       }
+       register_ptr[idx] = reg;
+       idx+=1;
+     }
+     if (reg_is_null) {
+       continue;
+     }
+   }
+   deregister_memory(&register_ptr, idx);
+    /*Benchmark #2: What is the maximum number of mappings we can create?*/
+   /* FILE *fp_two = fopen ("bench_two.csv", "w");
+    size_t num_mappings = 1;
+      printf("Number of pages: %lu\n", 50);
+      void *ext_mem_addr = NULL;
+        ret = max_mappings_benchmark(50, num_mappings, ext_mem_addr);
+         if (ret != 0) {
+	  break;
+         }
+	if (num_mappings > 100) {
+	  continue;
+        printf("Number of mappings: %lu with number of pages %u\n", num_mappings, 50);
+	num_mappings += 1;*/
     printf("Reached end of program execution\n");
     return 0;
 }

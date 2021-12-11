@@ -6,9 +6,8 @@ Dependencies
 Install the following dependencies in the listed order:
 
 Numa: 
-1. `sudo apt-get update`
-2. `sudo apt-get upgrade`
-3. `sudo apt-get install libnuma-dev`
+1. `sudo apt-get update && sudo apt-get upgrade`
+2. `sudo apt-get install libnuma-dev`
 
 Mellanox Driver:
 1. `wget https://www.mellanox.com/downloads/ofed/MLNX_OFED-<version>/MLNX_OFED_LINUX-<version>-<distribution>-<arch>.tgz
@@ -37,7 +36,7 @@ Compilation
 To compile the program, execute the following steps:
 
 1. Export RTE_TARGET: `export RTE_TARGET=build`
-2. Export RTE_SDK: `export RTE_SDK=/proj/demeter-PG0/murray22/nicbenchmarks/dpdk/`
+2. Export RTE_SDK: `export RTE_SDK=/proj/demeter-PG0/murray22/nicbenchmarks/dpdk`
 3. Run `make`
 
 Running the program
