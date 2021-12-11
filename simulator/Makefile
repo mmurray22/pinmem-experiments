@@ -1,2 +1,2 @@
-simulation: simulation.cpp
-	g++ -o simulation simulation.cpp
+simulation: demo_simulation.cpp
+	g++ -o simulation demo_simulation.cpp
