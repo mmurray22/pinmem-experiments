@@ -1,12 +1,16 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import csv
+
+csv_dir = '/results/csv/'
+graph_dir = '/results/graphs/'
 
 # Plot Type 1: Pinned Pages Over Time
 policies = ['LRU', 'Client', 'Hot_Key', 'Random']
 for i in range(1, 5):
     policy = policies[i - 1]
-    name = 'pinning' + str(i) + '.csv'
+    name = os.getenv('PWD') + csv_dir + 'pinning' + str(i) + '.csv'
     print(name)
     pages_over_time = []
     labels = []
@@ -62,7 +66,7 @@ for i in range(1, 5):
         box = ax.get_position()
         ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-        fig_name = policy + '_pin_over_time_' + str(offset) + '_' + num_evict + '.png'
+        fig_name = os.getenv('PWD') + graph_dir + policy + '_pin_over_time_' + str(offset) + '_' + num_evict + '.png'
         plt.savefig(fig_name)
 
 # Plot Type 2: Number of pages pinned over time
@@ -74,7 +78,7 @@ num_evict = ''
 skip = 1
 for i in range(1, 5):
     policy = policies[i - 1]
-    name = 'perf' + str(i) + '.csv'
+    name = os.getenv('PWD') + csv_dir +'perf' + str(i) + '.csv'
     print(name)
     num_sub = []
     num_add = []
@@ -111,7 +115,7 @@ plt.xlabel("Seconds")
 plt.ylabel("Number of Newly Pinned Pages")
 plt.title("Number of Newly Pinned Pages Over Time")
 plt.legend()
-fig_name = 'all_num_pinned_' + str(offset) + '_' + num_evict + '.png'
+fig_name = os.getenv('PWD') + graph_dir + 'all_num_pinned_' + str(offset) + '_' + num_evict + '.png'
 plt.savefig(fig_name)
 
 plt.clf()
@@ -123,5 +127,5 @@ plt.xlabel("Seconds")
 plt.ylabel("Number of Recently Unpinned Pages")
 plt.title("Number of Recently Unpinned Pages Over Time")
 plt.legend()
-fig_name = 'all_num_unpinned_' + str(offset) + '_' + num_evict + '.png'
+fig_name = os.getenv('PWD') + graph_dir + 'all_num_unpinned_' + str(offset) + '_' + num_evict + '.png'
 plt.savefig(fig_name)

@@ -1,2 +1,6 @@
-simulation: demo_simulation.cpp
-	g++ -o simulation demo_simulation.cpp
+simulation: simulation.cpp
+	g++ -o simulation simulation.cpp
+
+.PHONY: clean
+clean:
+	$(RM) simulation

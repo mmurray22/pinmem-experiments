@@ -13,3 +13,5 @@ Cargo.lock
 **.swp
 **.swo
 **/**.csv
+/simulator/results/csv/*.csv
+/simulator/results/graphs/*.png
