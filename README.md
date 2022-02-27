@@ -1,5 +1,8 @@
-# nicbenchmarks
-Benchmarking Mellanox NICs:
+# Benchmarks Overview
+This repository consists of various small-scale tests intended to help inform experimentation about pinned memory usage in kernel bypass networking stacks. Below, each individual experiment's purpose and how to run it is outlined: 
+
+# /nicbenchmarks - WORK IN PROGRESS
+The intended purpose of this benchmark is to measure how long it takes to register memory regions. To run the benchmark, run the following:
 
 Dependencies
 -------------
@@ -47,3 +50,7 @@ To run the program, follow these steps:
 2. Server: `sudo build/register -c 0xff -n 4 -w [bus-info value found in #5] --proc-type=auto -- --mode=SERVER --ip=[ip of the machine]`
 	a. Example Server command: `sudo build/register -c 0xff -n 4 -w 0000:41:00.0 --proc-type=auto -- --mode=SERVER --ip=192.168.1.1 --num_mbufs=2` 
 3. Client: `sudo build/register -c 0xff -n 4 -w [bus-info value found in #5] --proc-type=auto -- --mode=CLIENT -server_ip=[ip of the server] --ip=[ip of the machine] --server_mac=[mac address printed out by the server] --rate=120000 --message_size=1024 --time=10`
+
+# /simulation
+
+This folder contains simulation code which runs over a twitter trace [CITE TRACE] and observes various statistics related to number of pages "pinned".
